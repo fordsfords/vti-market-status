@@ -60,22 +60,19 @@ def check_market_status(rolling_days=20):
         latest_close = hist['Close'].iloc[-1]
 
         # Calculate threshold (95% of peak)
-        threshold = peak_rolling_avg * 0.95
+        threshold_95pct = peak_rolling_avg * 0.95
 
         # Determine if market is down
-        is_down = latest_close < threshold
-
-        # Calculate percentage from peak
-        pct_from_peak = ((latest_close - peak_rolling_avg) / peak_rolling_avg) * 100
+        is_down = latest_close < threshold_95pct
 
         return {
             'error': False,
             'is_down': is_down,
             'current_date': current_date.strftime('%Y-%m-%d'),
+            'end_date': end_date.strftime('%Y-%m-%d'),
             'peak_rolling_avg': round(peak_rolling_avg, 2),
             'peak_date': peak_date.strftime('%Y-%m-%d'),
-            'threshold_95pct': round(threshold, 2),
-            'pct_from_peak': round(pct_from_peak, 2),
+            'threshold_95pct': round(threshold_95pct, 2),
             'rolling_days': rolling_days,
             'latest_close': round(hist['Close'].iloc[-1], 2)
         }
@@ -271,8 +268,7 @@ def generate_html(status, output_file='index.html'):
             <h2>⚠️ Action Required</h2>
             <p>
                 Until this issue is resolved, <strong>do not sell VTI</strong> without manually
-                checking current market conditions. Use VBIL for expenses or manually verify
-                VTI's price before making any trades.
+                checking current market conditions.
             </p>
         </div>
 
@@ -293,12 +289,10 @@ def generate_html(status, output_file='index.html'):
     if status['is_down']:
         status_color = '#dc3545'  # Red
         status_message = 'MARKET IS DOWN'
-        recommendation = 'Wait for market to recover'
         status_icon = '⚠️'
     else:
         status_color = '#28a745'  # Green
         status_message = 'MARKET IS OK'
-        recommendation = 'Can sell VTI'
         status_icon = '✓'
 
     html = f"""<!DOCTYPE html>
@@ -366,11 +360,6 @@ def generate_html(status, output_file='index.html'):
             font-size: 2rem;
             font-weight: bold;
             margin-bottom: 10px;
-        }}
-
-        .recommendation {{
-            font-size: 1.2rem;
-            opacity: 0.95;
         }}
 
         .metrics {{
@@ -449,10 +438,6 @@ def generate_html(status, output_file='index.html'):
                 font-size: 1.5rem;
             }}
 
-            .recommendation {{
-                font-size: 1rem;
-            }}
-
             .metric-value {{
                 font-size: 1.2rem;
             }}
@@ -467,26 +452,25 @@ def generate_html(status, output_file='index.html'):
         <div class="status-box">
             <div class="status-icon">{status_icon}</div>
             <div class="status-message">{status_message}</div>
-            <div class="recommendation">{recommendation}</div>
         </div>
 
         <div class="metrics">
             <div class="metric">
-                <div class="metric-label">Current Price</div>
-                <div class="metric-value">${status['latest_close']}</div>
-                <div class="metric-subtext">VTI closing price</div>
-            </div>
-
-            <div class="metric">
-                <div class="metric-label">5-Year Peak</div>
+                <div class="metric-label">5-Year Peak, Smoothed</div>
                 <div class="metric-value">${status['peak_rolling_avg']}</div>
                 <div class="metric-subtext">Peak on {status['peak_date']}</div>
             </div>
 
             <div class="metric">
-                <div class="metric-label">Current vs. Peak</div>
-                <div class="metric-value">{status['pct_from_peak']:+.2f}%</div>
-                <div class="metric-subtext">95% threshold: ${status['threshold_95pct']}</div>
+                <div class="metric-label">95% of Peak</div>
+                <div class="metric-value">${status['threshold_95pct']}</div>
+                <div class="metric-subtext">Threshold for Down Market</div>
+            </div>
+
+            <div class="metric">
+                <div class="metric-label">Last Closing Price</div>
+                <div class="metric-value">${status['latest_close']}</div>
+                <div class="metric-subtext">Close on {status['end_date']}</div>
             </div>
         </div>
 
@@ -496,22 +480,21 @@ def generate_html(status, output_file='index.html'):
                 This page finds the peak {status['rolling_days']}-day rolling average of VTI over the past 5 years
                 (smoothing eliminates false peaks from volatility), then compares the most recent closing price
                 against 95% of that peak. When the current price falls more than 5% below the peak, the market is
-                considered "down". You should usually avoid selling into a down market.
+                considered "down".
             </p>
         </div>
 
         <div class="info-section" style="border-left-color: #e74c3c; background: #fdeaea;">
             <h2>⚠️ Important Reminder</h2>
             <p>
-                Always use a <strong>limit order</strong> when selling VTI. Even if this page shows
-                "MARKET IS OK", set your limit order at or above the 95% threshold (${status['threshold_95pct']})
-                to protect against sudden market drops during order execution.
+                Always use a <strong>limit order</strong> when selling. Even if this page shows
+                "MARKET IS OK", you can get sudden market drops.
             </p>
         </div>
 
         <div class="footer">
             Generated automatically via GitHub Actions<br>
-            Data updates daily at approximately 00:00 UTC
+            Data updates daily at approximately 06:00 UTC
         </div>
     </div>
 </body>
@@ -539,7 +522,6 @@ def main():
         # Error case - print error details
         print(f"ERROR: {status['error_type']}")
         print(f"Message: {status['error_message']}")
-        print("="*60 + "\n")
 
         # Generate error HTML page
         generate_html(status)
@@ -547,14 +529,12 @@ def main():
     else:
         # Success case - print status details
         print(f"Date: {status['current_date']}")
-        print(f"Latest close: ${status['latest_close']}")
-        print(f"5-year peak: ${status['peak_rolling_avg']} (on {status['peak_date']})")
+        print(f"5-year peak, smoothed: ${status['peak_rolling_avg']} (on {status['peak_date']})")
         print(f"95% threshold: ${status['threshold_95pct']}")
-        print(f"Current vs peak: {status['pct_from_peak']:+.2f}%")
-        print("-"*60)
+        print(f"Latest close: ${status['latest_close']}")
 
         if status['is_down']:
-            print("STATUS: MARKET IS DOWN - Use VBIL")
+            print("STATUS: MARKET IS DOWN - Maybe don't sell VTI")
         else:
             print("STATUS: MARKET IS OK - Can sell VTI")
 

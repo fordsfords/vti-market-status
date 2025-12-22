@@ -56,14 +56,14 @@ Upload these files to your repository:
 3. If prompted, click "I understand my workflows, go ahead and enable them"
 4. You should see the "Update VTI Market Status" workflow listed
 
-### 4. Enable GitHub Pages
+### 4. Set Workflow Permissions
 
-1. Go to Settings → Pages (left sidebar)
-2. Under "Source", select "Deploy from a branch"
-3. Under "Branch", select `gh-pages` and folder `/` (root)
+**Important:** This step is required or the workflow will fail with a 403 permission error.
+
+1. Go to Settings → Actions → General (left sidebar)
+2. Scroll down to "Workflow permissions"
+3. Select "Read and write permissions"
 4. Click "Save"
-5. **Note:** The `gh-pages` branch won't exist until you run the workflow for the first time
-6. After running the workflow once, refresh the Pages settings and you'll see your site URL
 
 ### 5. Run the Workflow Manually (First Time)
 
@@ -72,11 +72,21 @@ Upload these files to your repository:
 3. Click "Run workflow" → "Run workflow"
 4. Wait ~30 seconds for it to complete
 5. A new `gh-pages` branch will be created with just `index.html`
-6. Visit your GitHub Pages URL to see the status page
 
 **Note:** The workflow only touches the `gh-pages` branch. Your `main` branch stays clean with just source code - no daily commits cluttering your history.
 
-### 6. Verify Automatic Updates
+### 6. Enable GitHub Pages
+
+Now that the `gh-pages` branch exists, you can enable GitHub Pages:
+
+1. Go to Settings → Pages (left sidebar)
+2. Under "Source", select "Deploy from a branch"
+3. Under "Branch", select `gh-pages` and folder `/` (root)
+4. Click "Save"
+5. Wait a few minutes, then refresh - you'll see your site URL
+6. Visit your GitHub Pages URL to see the status page
+
+### 7. Verify Automatic Updates
 
 The workflow runs automatically daily at 06:00 UTC (1am EST / 2am EDT). You can verify by:
 - Checking the Actions tab for scheduled runs
@@ -106,7 +116,7 @@ Each workflow run gets its own separate log which is retained for 90 days.
 Edit `.github/workflows/update-vti-status.yml`:
 ```yaml
 schedule:
-  - cron: '0 6 * * *'  # 00:60 UTC (1am EST / 2am EDT)
+  - cron: '0 6 * * *'  # 06:00 UTC (1am EST / 2am EDT)
 ```
 
 NOTE: the tool assumes that it is run after midnight eastern time and before
@@ -123,9 +133,9 @@ rolling_days = 20  # Change to 10, 30, 50, etc.
 ## Troubleshooting
 
 **Workflow fails with "permission denied"**:
-- Go to Settings → Actions → General
-- Under "Workflow permissions", select "Read and write permissions"
-- Click "Save"
+- This means workflow permissions weren't set correctly
+- See step 4 in the setup instructions above
+- Go to Settings → Actions → General, select "Read and write permissions", then Save
 
 **GitHub Pages not working**:
 - Ensure repository is public
