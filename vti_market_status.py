@@ -17,11 +17,13 @@ def check_market_status(rolling_days=20):
         rolling_days: Number of days for rolling average (default 20)
 
     Returns:
-        dict with market status and key metrics
+        dict with market status and key metrics, or error info if failed
     """
     try:
         # Fetch 5 years of daily data plus the prior rolling_days data.
-        end_date = datetime.now()
+        # Set to yesterday's date to get the most-recent close.
+        # Assumes the tool is run after midnight ET and before market open.
+        end_date = datetime.now() - timedelta(days=1)
         start_date = end_date - timedelta(days=5*365 + rolling_days)
 
         print(f"Fetching VTI data from {start_date.date()} to {end_date.date()}...")
@@ -44,11 +46,14 @@ def check_market_status(rolling_days=20):
         five_years_ago = (end_date - timedelta(days=5*365)).replace(hour=0, minute=0, second=0, microsecond=0)
         hist_5yr = hist[hist.index >= five_years_ago]
 
+        if hist_5yr.empty:
+            raise ValueError("No data available in 5-year window")
+
         # Find the peak rolling average in the 5-year period
         peak_rolling_avg = hist_5yr['Rolling_Avg'].max()
         peak_date = hist_5yr['Rolling_Avg'].idxmax()
 
-        # Get current rolling average (most recent)
+        # Get date of most recent data
         current_date = hist_5yr.index[-1]
 
         # Get latest actual closing price (for sell decision)
@@ -64,6 +69,7 @@ def check_market_status(rolling_days=20):
         pct_from_peak = ((latest_close - peak_rolling_avg) / peak_rolling_avg) * 100
 
         return {
+            'error': False,
             'is_down': is_down,
             'current_date': current_date.strftime('%Y-%m-%d'),
             'peak_rolling_avg': round(peak_rolling_avg, 2),
@@ -74,8 +80,14 @@ def check_market_status(rolling_days=20):
             'latest_close': round(hist['Close'].iloc[-1], 2)
         }
     except Exception as e:
-        print(f"Error checking market status: {e}")
-        raise
+        error_msg = str(e)
+        print(f"Error checking market status: {error_msg}")
+        return {
+            'error': True,
+            'error_message': error_msg,
+            'error_type': type(e).__name__,
+            'rolling_days': rolling_days
+        }
 
 def generate_html(status, output_file='index.html'):
     """
@@ -85,20 +97,209 @@ def generate_html(status, output_file='index.html'):
         status: dict from check_market_status()
         output_file: name of HTML file to create
     """
-    # Determine status color and message
+    # Get current timestamp
+    generated_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+
+    # Check if there was an error
+    if status.get('error', False):
+        # Generate error page
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTI Market Status - Error</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .container {{
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }}
+
+        h1 {{
+            font-size: 2rem;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }}
+
+        .timestamp {{
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            margin-bottom: 30px;
+        }}
+
+        .error-box {{
+            background: #dc3545;
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }}
+
+        .error-icon {{
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }}
+
+        .error-message {{
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }}
+
+        .error-details {{
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #dc3545;
+            margin-bottom: 20px;
+            text-align: left;
+        }}
+
+        .error-details h2 {{
+            font-size: 1rem;
+            margin-bottom: 10px;
+        }}
+
+        .error-details p {{
+            font-size: 0.9rem;
+            line-height: 1.8;
+            margin-bottom: 10px;
+        }}
+
+        .error-details code {{
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }}
+
+        .info-section {{
+            background: #e8f4f8;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+            margin-bottom: 20px;
+        }}
+
+        .info-section h2 {{
+            font-size: 1rem;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }}
+
+        .info-section p {{
+            font-size: 0.9rem;
+            color: #555;
+            line-height: 1.8;
+        }}
+
+        .footer {{
+            text-align: center;
+            color: #95a5a6;
+            font-size: 0.85rem;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ecf0f1;
+        }}
+
+        @media (max-width: 600px) {{
+            .container {{
+                padding: 20px;
+            }}
+
+            h1 {{
+                font-size: 1.5rem;
+            }}
+
+            .error-message {{
+                font-size: 1.5rem;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>VTI Market Status</h1>
+        <div class="timestamp">Last update attempted: {generated_time}</div>
+
+        <div class="error-box">
+            <div class="error-icon">❌</div>
+            <div class="error-message">ERROR OCCURRED</div>
+        </div>
+
+        <div class="error-details">
+            <h2>Error Details</h2>
+            <p><strong>Type:</strong> <code>{status.get('error_type', 'Unknown')}</code></p>
+            <p><strong>Message:</strong> {status.get('error_message', 'Unknown error')}</p>
+        </div>
+
+        <div class="info-section">
+            <h2>What This Means</h2>
+            <p>
+                The VTI market status could not be retrieved. This might be due to network issues,
+                Yahoo Finance API problems, or other technical difficulties. The page will attempt
+                to update again during the next scheduled run.
+            </p>
+        </div>
+
+        <div class="info-section" style="border-left-color: #e74c3c; background: #fdeaea;">
+            <h2>⚠️ Action Required</h2>
+            <p>
+                Until this issue is resolved, <strong>do not sell VTI</strong> without manually
+                checking current market conditions. Use VBIL for expenses or manually verify
+                VTI's price before making any trades.
+            </p>
+        </div>
+
+        <div class="footer">
+            Generated automatically via GitHub Actions<br>
+            Check the Actions log for more details
+        </div>
+    </div>
+</body>
+</html>
+"""
+        with open(output_file, 'w') as f:
+            f.write(html)
+        print(f"Error page generated: {output_file}")
+        return
+
+    # Normal status page - determine status color and message
     if status['is_down']:
         status_color = '#dc3545'  # Red
         status_message = 'MARKET IS DOWN'
-        recommendation = 'Use VBIL for living expenses'
+        recommendation = 'Wait for market to recover'
         status_icon = '⚠️'
     else:
         status_color = '#28a745'  # Green
         status_message = 'MARKET IS OK'
-        recommendation = 'Can sell VTI for living expenses'
+        recommendation = 'Can sell VTI'
         status_icon = '✓'
-
-    # Get current timestamp
-    generated_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -277,18 +478,13 @@ def generate_html(status, output_file='index.html'):
             </div>
 
             <div class="metric">
-                <div class="metric-label">{status['rolling_days']}-Day Average</div>
-                <div class="metric-subtext">As of {status['current_date']}</div>
-            </div>
-
-            <div class="metric">
                 <div class="metric-label">5-Year Peak</div>
                 <div class="metric-value">${status['peak_rolling_avg']}</div>
                 <div class="metric-subtext">Peak on {status['peak_date']}</div>
             </div>
 
             <div class="metric">
-                <div class="metric-label">vs. Peak</div>
+                <div class="metric-label">Current vs. Peak</div>
                 <div class="metric-value">{status['pct_from_peak']:+.2f}%</div>
                 <div class="metric-subtext">95% threshold: ${status['threshold_95pct']}</div>
             </div>
@@ -297,9 +493,10 @@ def generate_html(status, output_file='index.html'):
         <div class="info-section">
             <h2>How This Works</h2>
             <p>
-                This page tracks VTI's {status['rolling_days']}-day rolling average against its 5-year peak.
-                When the current rolling average falls more than 5% below the peak, the market is
-                considered "down" and you should use VBIL for expenses instead of selling VTI.
+                This page finds the peak {status['rolling_days']}-day rolling average of VTI over the past 5 years
+                (smoothing eliminates false peaks from volatility), then compares the most recent closing price
+                against 95% of that peak. When the current price falls more than 5% below the peak, the market is
+                considered "down". You should usually avoid selling into a down market.
             </p>
         </div>
 
@@ -328,16 +525,27 @@ def generate_html(status, output_file='index.html'):
 
 def main():
     """Main function to check market status and generate HTML."""
-    try:
-        # Check market status
-        rolling_days = 20  # Must be less than 100.
-        print("Checking VTI market status...")
-        status = check_market_status(rolling_days=rolling_days)
+    # Check market status
+    rolling_days = 20  # Must be less than 100.
+    print("Checking VTI market status...")
+    status = check_market_status(rolling_days=rolling_days)
 
-        # Print to console for GitHub Actions logs
-        print("\n" + "="*60)
-        print("VTI MARKET STATUS")
-        print("="*60)
+    # Print to console for GitHub Actions logs
+    print("\n" + "="*60)
+    print("VTI MARKET STATUS")
+    print("="*60)
+
+    if status.get('error', False):
+        # Error case - print error details
+        print(f"ERROR: {status['error_type']}")
+        print(f"Message: {status['error_message']}")
+        print("="*60 + "\n")
+
+        # Generate error HTML page
+        generate_html(status)
+        print("⚠ Generated error page: index.html")
+    else:
+        # Success case - print status details
         print(f"Date: {status['current_date']}")
         print(f"Latest close: ${status['latest_close']}")
         print(f"5-year peak: ${status['peak_rolling_avg']} (on {status['peak_date']})")
@@ -355,10 +563,6 @@ def main():
         # Generate HTML
         generate_html(status)
         print("✓ Successfully generated index.html")
-
-    except Exception as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        sys.exit(1)
 
 if __name__ == "__main__":
     main()

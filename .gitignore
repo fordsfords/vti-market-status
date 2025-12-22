@@ -1,3 +1,20 @@
+# Scratch files
+x
+x.*
+*.x
+*.tmp
+*.tmp[0-9]
+tmp.*
+~*
+*~
+*.bak
+*.log
+*.out
+.DS_Store
+.mypy_cache
+.ruff_cache
+# Output file from the tool
+index.html
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
