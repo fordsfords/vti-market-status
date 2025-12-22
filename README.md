@@ -7,6 +7,8 @@ Thanks to Claude.ai for initially writing most of the content of this repo.
 Note that I, Steven Ford, have reviewed all of the content, have made changes,
 and am ultimately responsible for it.
 
+To see the market status as of the previous close: https://www.geeky-boy.com/vti-market-status/
+
 ## Down Market
 
 What is a "down" market?
@@ -18,6 +20,8 @@ I sell stocks.
 This tool fetches 5 years worth of price data for the VTI stock (an ETF) and does a 20-day
 rolling average and finds the peak value. This is the peak VTI price over the past 5 years.
 The rolling average is done to eliminate spikes of volatility.
+
+Here is my installation of this tool: https://www.geeky-boy.com/vti-market-status/
 
 Given that peak value, a "down" market means that the current price of VTI is 5% or more below that peak.
 
