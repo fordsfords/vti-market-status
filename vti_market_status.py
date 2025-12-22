@@ -267,7 +267,7 @@ def generate_html(status, output_file='index.html'):
         <div class="info-section" style="border-left-color: #e74c3c; background: #fdeaea;">
             <h2>⚠️ Action Required</h2>
             <p>
-                Until this issue is resolved, <strong>do not sell VTI</strong> without manually
+                Until this issue is resolved, <strong>do not sell</strong> without manually
                 checking current market conditions.
             </p>
         </div>
@@ -534,9 +534,9 @@ def main():
         print(f"Latest close: ${status['latest_close']}")
 
         if status['is_down']:
-            print("STATUS: MARKET IS DOWN - Maybe don't sell VTI")
+            print("STATUS: MARKET IS DOWN - Maybe don't sell")
         else:
-            print("STATUS: MARKET IS OK - Can sell VTI")
+            print("STATUS: MARKET IS OK - Can sell")
 
         print("="*60 + "\n")
 
