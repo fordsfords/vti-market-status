@@ -7,24 +7,32 @@ Creates an HTML page showing whether VTI is in a "down" market
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta, timezone
+import math
 import sys
 
-def check_market_status(rolling_days=20):
+# Conservative estimate of trading days per week (accounts for holidays)
+TRADING_DAYS_PER_WEEK = 4
+
+def check_market_status(rolling_days=20, years=10):
     """
     Check if VTI is currently in a down market.
 
     Args:
         rolling_days: Number of days for rolling average (default 20)
+        years: Number of years to look back (default 10)
 
     Returns:
         dict with market status and key metrics, or error info if failed
     """
     try:
-        # Fetch 5 years of daily data plus the prior rolling_days data.
-        # Set to yesterday's date to get the most-recent close.
-        # Assumes the tool is run after midnight ET and before market open.
+        # Fetch "years" of daily data plus enough calendar days to get rolling_days trading days.
+        # Assumes TRADING_DAYS_PER_WEEK (accounts for holidays).
+        rolling_calendar_days = math.ceil(rolling_days / TRADING_DAYS_PER_WEEK) * 7
+        
+        # Fetch up to today to ensure we get the most recent data
         end_date = datetime.now() - timedelta(days=1)
-        start_date = end_date - timedelta(days=5*365 + rolling_days)
+        # Use 365.25 to account for leap years
+        start_date = end_date - timedelta(days=years*365.25 + rolling_calendar_days)
 
         print(f"Fetching VTI data from {start_date.date()} to {end_date.date()}...")
         vti = yf.Ticker("VTI")
@@ -32,6 +40,12 @@ def check_market_status(rolling_days=20):
 
         if hist.empty:
             raise ValueError("Failed to fetch VTI data")
+
+        # Filter out non-trading days (weekends/holidays have zero volume)
+        hist = hist[hist['Volume'] > 0]
+
+        if hist.empty:
+            raise ValueError("No trading days found in fetched data")
 
         # Calculate rolling average
         hist['Rolling_Avg'] = hist['Close'].rolling(window=rolling_days).mean()
@@ -42,22 +56,25 @@ def check_market_status(rolling_days=20):
         # Convert index to timezone-naive for easier date math
         hist.index = hist.index.tz_localize(None)
 
-        # Get exactly 5 years of data
-        five_years_ago = (end_date - timedelta(days=5*365)).replace(hour=0, minute=0, second=0, microsecond=0)
-        hist_5yr = hist[hist.index >= five_years_ago]
+        # Update end_date to reflect the actual last trading day
+        end_date = hist.index[-1]
 
-        if hist_5yr.empty:
-            raise ValueError("No data available in 5-year window")
+        # Get exactly "years" of data
+        # Use 365.25 to account for leap years
+        # .replace() zeroes the time component to ensure boundary comparison at midnight,
+        # preventing exclusion of data due to intraday timestamps
+        years_ago = (end_date - timedelta(days=years*365.25)).replace(hour=0, minute=0, second=0, microsecond=0)
+        hist_years = hist[hist.index > years_ago]
 
-        # Find the peak rolling average in the 5-year period
-        peak_rolling_avg = hist_5yr['Rolling_Avg'].max()
-        peak_date = hist_5yr['Rolling_Avg'].idxmax()
+        if hist_years.empty:
+            raise ValueError(f"No data available in {years}-year window")
 
-        # Get date of most recent data
-        current_date = hist_5yr.index[-1]
+        # Find the peak rolling average in the period
+        peak_rolling_avg = hist_years['Rolling_Avg'].max()
+        peak_date = hist_years['Rolling_Avg'].idxmax()
 
         # Get latest actual closing price (for sell decision)
-        latest_close = hist['Close'].iloc[-1]
+        latest_close = hist_years['Close'].iloc[-1]
 
         # Calculate threshold (95% of peak)
         threshold_95pct = peak_rolling_avg * 0.95
@@ -68,13 +85,12 @@ def check_market_status(rolling_days=20):
         return {
             'error': False,
             'is_down': is_down,
-            'current_date': current_date.strftime('%Y-%m-%d'),
             'end_date': end_date.strftime('%Y-%m-%d'),
             'peak_rolling_avg': round(peak_rolling_avg, 2),
             'peak_date': peak_date.strftime('%Y-%m-%d'),
             'threshold_95pct': round(threshold_95pct, 2),
             'rolling_days': rolling_days,
-            'latest_close': round(hist['Close'].iloc[-1], 2)
+            'latest_close': round(latest_close, 2)
         }
     except Exception as e:
         error_msg = str(e)
@@ -86,7 +102,7 @@ def check_market_status(rolling_days=20):
             'rolling_days': rolling_days
         }
 
-def generate_html(status, output_file='index.html'):
+def generate_html(status, years=10, output_file='index.html'):
     """
     Generate an HTML page showing the market status.
 
@@ -456,7 +472,7 @@ def generate_html(status, output_file='index.html'):
 
         <div class="metrics">
             <div class="metric">
-                <div class="metric-label">5-Year Peak, Smoothed</div>
+                <div class="metric-label">Peak, Smoothed</div>
                 <div class="metric-value">${status['peak_rolling_avg']}</div>
                 <div class="metric-subtext">Peak on {status['peak_date']}</div>
             </div>
@@ -477,10 +493,10 @@ def generate_html(status, output_file='index.html'):
         <div class="info-section">
             <h2>How This Works</h2>
             <p>
-                This page finds the peak {status['rolling_days']}-day rolling average of VTI over the past 5 years
-                (smoothing eliminates false peaks from volatility), then compares the most recent closing price
-                against 95% of that peak. When the current price falls more than 5% below the peak, the market is
-                considered "down".
+                This page finds the peak {status['rolling_days']}-day rolling average of VTI over the past {years} years
+                (smoothing eliminates false peaks from volatility), and takes 95% of that peak as a threshold.
+                It then compares the most recent closing price (from yesterday) to that threshold.
+                If that close is below the threshold, the market is considered "down".
             </p>
         </div>
 
@@ -509,9 +525,10 @@ def generate_html(status, output_file='index.html'):
 def main():
     """Main function to check market status and generate HTML."""
     # Check market status
-    rolling_days = 20  # Must be less than 100.
+    rolling_days = 20
+    years = 10
     print("Checking VTI market status...")
-    status = check_market_status(rolling_days=rolling_days)
+    status = check_market_status(rolling_days=rolling_days, years=years)
 
     # Print to console for GitHub Actions logs
     print("\n" + "="*60)
@@ -524,12 +541,12 @@ def main():
         print(f"Message: {status['error_message']}")
 
         # Generate error HTML page
-        generate_html(status)
+        generate_html(status, years=years)
         print("⚠ Generated error page: index.html")
     else:
         # Success case - print status details
-        print(f"Date: {status['current_date']}")
-        print(f"5-year peak, smoothed: ${status['peak_rolling_avg']} (on {status['peak_date']})")
+        print(f"Date: {status['end_date']}")
+        print(f"{years}-year peak, smoothed: ${status['peak_rolling_avg']} (on {status['peak_date']})")
         print(f"95% threshold: ${status['threshold_95pct']}")
         print(f"Latest close: ${status['latest_close']}")
 

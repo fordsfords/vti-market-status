@@ -11,19 +11,21 @@ To see the market status as of the previous close: https://www.geeky-boy.com/vti
 
 ## Down Market
 
-What is a "down" market?
-It's a market condition that my retirement strategy watches for.
-A central concept of my strategy is to never "sell low" stocks.
+This tool fetches 10 years worth of price data for the VTI stock (an ETF) and does a 20-day
+rolling average and finds the peak value. This is the peak VTI price over the past 10 years.
+The rolling average is done to eliminate spikes of volatility.
+95% of that peak is the down market threshold.
+If the previous trading day's close price is below that threshold, the market is "down".
+
+Why do I care?
+My retirement strategy watches for a "down market".
+A central concept of my strategy is to never "sell stocks low".
 I want an objective and quantatative way to define when the market is "down" before
 I sell stocks.
 
-This tool fetches 5 years worth of price data for the VTI stock (an ETF) and does a 20-day
-rolling average and finds the peak value. This is the peak VTI price over the past 5 years.
-The rolling average is done to eliminate spikes of volatility.
-
 Here is my installation of this tool: https://www.geeky-boy.com/vti-market-status/
 
-Given that peak value, a "down" market means that the current price of VTI is 5% or more below that peak.
+Here is a recent history of VTI price data: https://finance.yahoo.com/quote/VTI/history/
 
 **Warning:** Do not make trading decisions based solely on this tool.
 For one thing, there might be bugs in this code;
@@ -34,7 +36,7 @@ affect the markets.
 So a Tuesday close at an all-time high can be erased within seconds after Wednesday's open.
 
 A better approach: when selling VTI, use a limit order with the threshold value 
-(5% below the 5-year peak) as the minimum price.
+(5% below the 10-year peak) as the minimum price.
 This prevents selling into a sudden drop that occurs after you place your order.
 
 ## Notes to myself on how to deploy this tool on GitHub.
@@ -196,7 +198,7 @@ Understanding when data is available and what "current price" means:
 
 ### Rolling Average Calculation
 
-The code fetches more than 5 years of data to properly calculate the rolling average:
+The code fetches more than 10 years of data to properly calculate the rolling average:
 
 ```python
 start_date = end_date - timedelta(days=5*365 + rolling_days)
@@ -204,14 +206,14 @@ start_date = end_date - timedelta(days=5*365 + rolling_days)
 
 This expansion by `rolling_days` (default 20) is necessary because:
 - A 20-day rolling average needs 20 days of prior data to calculate
-- Without this expansion, the first ~20 days of the 5-year window wouldn't have a rolling average
-- After calculating the rolling average for all data, the code filters to exactly 5 years
+- Without this expansion, the first ~20 days of the 10-year window wouldn't have a rolling average
+- After calculating the rolling average for all data, the code filters to exactly 10 years
 
 For example, with `rolling_days=20`, the code:
-1. Fetches 5 years + 20 days of data
+1. Fetches 10 years + 20 days of data
 2. Calculates 20-day rolling average for all data
-3. Filters to exactly 5 years of data (where rolling average is defined)
-4. Finds the peak rolling average in that 5-year window
+3. Filters to exactly 10 years of data (where rolling average is defined)
+4. Finds the peak rolling average in that 10-year window
 
 #### Comparing Averaged Data to Non-Averaged Data
 
